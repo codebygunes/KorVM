@@ -1,6 +1,22 @@
 ﻿[package]
-name = "kor_engine"
+name = "korvm_core"
 version = "0.1.0"
 edition = "2021"
+authors = ["Elif Nur Ayhan <codebygunes>"]
+description = "KorVM: Zero-Trust WebAssembly Runtime Core Architecture"
+license = "Apache-2.0"
 
 [dependencies]
+# W3C Compliant WebAssembly Parser
+wasmparser = "0.118.0"
+
+# Advanced Error Handling
+anyhow = "1.0.81"
+thiserror = "1.0.58"
+
+# Cranelift JIT Ecosystem for High-Performance Native Compilation
+cranelift = "0.105.0"
+cranelift-module = "0.105.0"
+cranelift-jit = "0.105.0"
+cranelift-codegen = "0.105.0"
+cranelift-frontend = "0.105.0"

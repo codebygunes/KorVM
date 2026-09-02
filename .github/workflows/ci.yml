@@ -7,28 +7,32 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
-  test-chaos-and-parser:
+  test-python-and-rust:
+    name: Multi-Language Core Testing
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    - name: Install Dependencies
+    - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install hypothesis
 
-    - name: Run W3C Parser & Real-World Chaos Test
+    - name: Run Python JIT & W3C Parser Chaos Tests
       run: |
         python tests/integration/test_impossible_real_world_chaos.py
 
-    - name: Run Unit & JIT Tests
+    - name: Set up Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run Rust Core "Impossible" Chaos Tests
+      working-directory: ./core_engine
       run: |
-        python tests/unit/test_interpreter.py
-        python tests/unit/test_jit.py
+        cargo test --verbose
