@@ -9,6 +9,7 @@ license = "Apache-2.0"
 [dependencies]
 # W3C Compliant WebAssembly Parser
 wasmparser = "0.118.0"
+libc = "0.2.189"
 
 # Advanced Error Handling
 anyhow = "1.0.81"
