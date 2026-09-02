@@ -61,7 +61,7 @@ impl KorVmJitEngine {
 
         // 4. Finalize compilation to hardware memory safely
         self.module.clear_context(&mut self.ctx);
-        self.module.finalize_definitions();
+        let _ = self.module.finalize_definitions();
 
         // 5. Safe Execution Boundary
         let code_ptr = self.module.get_finalized_function(id);
