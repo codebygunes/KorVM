@@ -1,13 +1,18 @@
 //! KorVM: Hardware-Assisted Zero-Trust Sandbox (O(1) Guard Pages)
 //! Author: Elif Nur Ayhan (codebygunes)
 //! License: Apache-2.0
-//! Description: Implements true hardware-level O(1) memory isolation using OS mmap/mprotect.
+//! Description: Implements true hardware-level O(1) memory isolation using OS mmap/mprotect or VirtualAlloc.
 
 use crate::error::KorVmError;
 use std::ptr;
 
 #[cfg(unix)]
 use libc;
+
+#[cfg(windows)]
+use winapi::um::memoryapi::{VirtualAlloc, VirtualFree};
+#[cfg(windows)]
+use winapi::um::winnt::{MEM_RESERVE, MEM_COMMIT, MEM_RELEASE, PAGE_NOACCESS, PAGE_READWRITE};
 
 pub const WASM_PAGE_SIZE: usize = 64 * 1024;
 // 4GB Virtual Memory Reservation (Hardware Guard Region)
@@ -20,7 +25,7 @@ pub struct ZeroTrustSandbox {
 }
 
 impl ZeroTrustSandbox {
-    /// Initializes the hardware-assisted sandbox using OS memory management (mmap).
+    /// Initializes the hardware-assisted sandbox using OS memory management.
     pub fn new(initial_pages: usize, max_pages: Option<usize>) -> Result<Self, KorVmError> {
         if let Some(max) = max_pages {
             if initial_pages > max {
@@ -61,16 +66,41 @@ impl ZeroTrustSandbox {
             ptr as *mut u8
         };
 
-        #[cfg(not(windows))]
-        #[cfg(not(unix))]
-        let base_ptr = {
-            return Err(KorVmError::MemoryFault("Hardware guard pages require a supported Unix/Linux environment.".to_string()));
+        #[cfg(windows)]
+        let base_ptr = unsafe {
+            // 1. RESERVE 4GB of Virtual Address Space with PAGE_NOACCESS (Guard region)
+            let ptr = VirtualAlloc(
+                ptr::null_mut(),
+                GUARD_REGION_SIZE,
+                MEM_RESERVE,
+                PAGE_NOACCESS,
+            );
+
+            if ptr.is_null() {
+                return Err(KorVmError::MemoryFault("CRITICAL: Windows failed to reserve hardware guard pages!".to_string()));
+            }
+
+            // 2. COMMIT only the explicitly requested initial pages (PAGE_READWRITE)
+            let initial_bytes = initial_pages.checked_mul(WASM_PAGE_SIZE).unwrap_or(0);
+            if initial_bytes > 0 {
+                let committed = VirtualAlloc(
+                    ptr,
+                    initial_bytes,
+                    MEM_COMMIT,
+                    PAGE_READWRITE,
+                );
+                if committed.is_null() {
+                    VirtualFree(ptr, 0, MEM_RELEASE);
+                    return Err(KorVmError::MemoryFault("CRITICAL: Windows failed to commit initial memory!".to_string()));
+                }
+            }
+
+            ptr as *mut u8
         };
 
-        #[cfg(windows)]
+        #[cfg(not(any(unix, windows)))]
         let base_ptr = {
-            // Windows yerel geliştirme ortamı için güvenli stub/fall-back
-            ptr::null_mut()
+            return Err(KorVmError::MemoryFault("Hardware guard pages require a supported operating system environment.".to_string()));
         };
 
         Ok(Self {
@@ -122,6 +152,23 @@ impl ZeroTrustSandbox {
             }
         }
 
+        #[cfg(windows)]
+        unsafe {
+            let new_region_start = self.base_ptr.add(self.current_pages * WASM_PAGE_SIZE);
+            let new_region_size = additional_pages * WASM_PAGE_SIZE;
+
+            let committed = VirtualAlloc(
+                new_region_start as *mut _,
+                new_region_size,
+                MEM_COMMIT,
+                PAGE_READWRITE,
+            );
+
+            if committed.is_null() {
+                return Err(KorVmError::MemoryFault("Windows failed to expand hardware memory bounds".to_string()));
+            }
+        }
+
         let old_pages = self.current_pages;
         self.current_pages = new_pages;
         Ok(old_pages)
@@ -133,6 +180,11 @@ impl Drop for ZeroTrustSandbox {
         #[cfg(unix)]
         unsafe {
             libc::munmap(self.base_ptr as *mut libc::c_void, GUARD_REGION_SIZE);
+        }
+
+        #[cfg(windows)]
+        unsafe {
+            VirtualFree(self.base_ptr as *mut _, 0, MEM_RELEASE);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "korvm_core"
 version = "0.1.0"
 edition = "2021"
@@ -21,3 +21,4 @@ cranelift-module = "0.105.0"
 cranelift-jit = "0.105.0"
 cranelift-codegen = "0.105.0"
 cranelift-frontend = "0.105.0"
+winapi = { version = "0.3.9", features = ["memoryapi", "winnt"] }

@@ -241,6 +241,7 @@ dependencies = [
  "libc",
  "thiserror",
  "wasmparser",
+ "winapi",
 ]
 
 [[package]]
