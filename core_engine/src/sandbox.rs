@@ -61,8 +61,17 @@ impl ZeroTrustSandbox {
             ptr as *mut u8
         };
 
+        #[cfg(not(windows))]
         #[cfg(not(unix))]
-        let base_ptr = unimplemented!("Hardware guard pages currently require a Unix/Linux environment for mmap.");
+        let base_ptr = {
+            return Err(KorVmError::MemoryFault("Hardware guard pages require a supported Unix/Linux environment.".to_string()));
+        };
+
+        #[cfg(windows)]
+        let base_ptr = {
+            // Windows yerel geliştirme ortamı için güvenli stub/fall-back
+            ptr::null_mut()
+        };
 
         Ok(Self {
             base_ptr,
