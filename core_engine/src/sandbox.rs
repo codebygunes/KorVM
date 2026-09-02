@@ -31,7 +31,6 @@ impl ZeroTrustSandbox {
         #[cfg(unix)]
         let base_ptr = unsafe {
             // 1. RESERVE 4GB of Virtual Address Space (PROT_NONE)
-            // This creates an impenetrable hardware wall. Accessing it triggers SIGSEGV.
             let ptr = libc::mmap(
                 ptr::null_mut(),
                 GUARD_REGION_SIZE,
@@ -72,24 +71,17 @@ impl ZeroTrustSandbox {
         })
     }
 
-    /// OS-Level Hardware protection completely removes the need for software if-checks.
-    /// The CPU MMU (Memory Management Unit) handles boundary violations natively.
     #[inline(always)]
     pub fn check_bounds(&self, _offset: usize, _size: usize) -> Result<(), KorVmError> {
-        // YAZILIMSAL SINIR KONTROLÜ KALDIRILDI!
-        // İşletim sisteminin MMU (Memory Management Unit) birimi, sınır dışı 
-        // erişimlerde O(1) maliyetle doğrudan donanım kesintisi (SIGSEGV) üretecektir.
         Ok(())
     }
 
     pub fn load_i32(&self, offset: usize) -> Result<i32, KorVmError> {
-        // Doğrudan bellek erişimi. O(1) maliyet.
         let ptr = unsafe { self.base_ptr.add(offset) as *const i32 };
         Ok(unsafe { ptr::read_unaligned(ptr) })
     }
 
     pub fn store_i32(&mut self, offset: usize, value: i32) -> Result<(), KorVmError> {
-        // Doğrudan bellek erişimi. O(1) maliyet.
         let ptr = unsafe { self.base_ptr.add(offset) as *mut i32 };
         unsafe { ptr::write_unaligned(ptr, value) };
         Ok(())
@@ -110,7 +102,6 @@ impl ZeroTrustSandbox {
             let new_region_start = self.base_ptr.add(self.current_pages * WASM_PAGE_SIZE);
             let new_region_size = additional_pages * WASM_PAGE_SIZE;
 
-            // Expand the committed memory area natively via OS
             let res = libc::mprotect(
                 new_region_start as *mut libc::c_void,
                 new_region_size,
@@ -132,8 +123,11 @@ impl Drop for ZeroTrustSandbox {
     fn drop(&mut self) {
         #[cfg(unix)]
         unsafe {
-            // Free the entire 4GB virtual region back to the OS upon destruction
             libc::munmap(self.base_ptr as *mut libc::c_void, GUARD_REGION_SIZE);
         }
     }
 }
+
+// Thread-safety declarations for raw pointers under Mutex protection
+unsafe impl Send for ZeroTrustSandbox {}
+unsafe impl Sync for ZeroTrustSandbox {}
